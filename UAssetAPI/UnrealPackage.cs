@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using UAssetAPI.CustomVersions;
 using UAssetAPI.ExportTypes;
 using UAssetAPI.FieldTypes;
 using UAssetAPI.IO;
@@ -539,7 +540,7 @@ namespace UAssetAPI
             List<CustomVersion> res = new List<CustomVersion>();
             foreach (KeyValuePair<Guid, string> entry in CustomVersion.GuidToCustomVersionStringMap)
             {
-                Type customVersionType = Type.GetType("UAssetAPI." + entry.Value);
+                Type customVersionType = Type.GetType("UAssetAPI.CustomVersions." + entry.Value);
                 if (customVersionType == null) continue;
                 int guessedCustomVersion = GuessCustomVersionFromTypeAndEngineVersion(chosenVersion, customVersionType);
                 if (guessedCustomVersion < 0) continue;
