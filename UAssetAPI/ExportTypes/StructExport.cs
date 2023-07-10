@@ -21,7 +21,7 @@ namespace UAssetAPI.ExportTypes
         /// <summary>
         /// List of child fields
         /// </summary>
-        public FPackageIndex[] Children;
+        public List<FPackageIndex> Children;
 
         /// <summary>
         /// Properties serialized with this struct definition
@@ -72,15 +72,17 @@ namespace UAssetAPI.ExportTypes
             if (Asset.GetCustomVersion<FFrameworkObjectVersion>() < FFrameworkObjectVersion.RemoveUField_Next)
             {
                 var firstChild = new FPackageIndex(reader.ReadInt32());
-                Children = firstChild.IsNull() ? Array.Empty<FPackageIndex>() : new[] { firstChild };
+                Children = new List<FPackageIndex>();
+                if (!firstChild.IsNull())
+                    Children.Add(firstChild);
             }
             else
             {
                 int numIndexEntries = reader.ReadInt32();
-                Children = new FPackageIndex[numIndexEntries];
+                Children = new List<FPackageIndex>();
                 for (int i = 0; i < numIndexEntries; i++)
                 {
-                    Children[i] = new FPackageIndex(reader.ReadInt32());
+                    Children.Add(new FPackageIndex(reader.ReadInt32()));
                 }
             }
 
@@ -141,7 +143,7 @@ namespace UAssetAPI.ExportTypes
 
             if (Asset.GetCustomVersion<FFrameworkObjectVersion>() < FFrameworkObjectVersion.RemoveUField_Next)
             {
-                if (Children.Length == 0) 
+                if (Children.Count == 0) 
                 {
                     writer.Write(0);
                 }
@@ -152,8 +154,8 @@ namespace UAssetAPI.ExportTypes
             }
             else
             {
-                writer.Write(Children.Length);
-                for (int i = 0; i < Children.Length; i++)
+                writer.Write(Children.Count);
+                for (int i = 0; i < Children.Count; i++)
                 {
                     writer.Write(Children[i].Index);
                 }

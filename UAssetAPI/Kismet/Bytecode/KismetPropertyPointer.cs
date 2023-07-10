@@ -27,6 +27,8 @@ namespace UAssetAPI.Kismet.Bytecode
         [DefaultValue(null)]
         public FFieldPath New;
 
+        internal protected bool IsDummy = false;
+
         public bool ShouldSerializeOld()
         {
             return Old != null;

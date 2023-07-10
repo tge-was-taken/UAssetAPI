@@ -88,7 +88,7 @@ namespace UAssetAPI.UnrealTypes
         /// <summary>
         /// Dummy value. If defined, this FName does not actually point to a value in any name map, but will still act as if it does.
         /// </summary>
-        internal FString DummyValue = null;
+        internal protected FString DummyValue = null;
 
         /// <summary>
         /// Converts this FName instance into a human-readable string. This is the inverse of <see cref="FromString(INameMap, string)"/>.

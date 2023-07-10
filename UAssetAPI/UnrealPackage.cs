@@ -607,7 +607,7 @@ namespace UAssetAPI
                                 }
                             }
                         }
-                        else if (MainSerializer.PropertyTypeRegistry.ContainsKey(exportClassType) || exportClassType == "ClassProperty")
+                        else if (MainSerializer.PropertyTypeRegistry.ContainsKey(exportClassType) || exportClassType == "ClassProperty" || exportClassType == "SoftClassProperty")
                         {
                             Exports[i] = Exports[i].ConvertToChildExport<PropertyExport>();
                             Exports[i].Read(reader, (int)nextStarting);

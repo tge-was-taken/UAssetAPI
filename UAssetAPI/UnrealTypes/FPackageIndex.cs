@@ -18,6 +18,10 @@ namespace UAssetAPI.UnrealTypes
     [JsonConverter(typeof(FPackageIndexJsonConverter))]
     public class FPackageIndex
     {
+        public static readonly FPackageIndex Null = new FPackageIndex(0);
+
+        internal protected bool IsDummy = false;
+
         /// <summary>
         /// Values greater than zero indicate that this is an index into the ExportMap.
         /// The actual array index will be (FPackageIndex - 1).

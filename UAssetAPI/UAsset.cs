@@ -395,11 +395,11 @@ namespace UAssetAPI
 
         /// <summary>Number of gatherable text data items in this package</summary>
         [JsonProperty]
-        internal int GatherableTextDataCount;
+        public int GatherableTextDataCount;
 
         /// <summary>Location into the file on disk for the gatherable text data items</summary>
         [JsonProperty]
-        internal int GatherableTextDataOffset;
+        public int GatherableTextDataOffset;
 
         /// <summary>Number of exports contained in this package</summary>
         internal int ExportCount = 0;
@@ -424,41 +424,41 @@ namespace UAssetAPI
 
         /// <summary>Location into the file on disk for the SearchableNamesMap data</summary>
         [JsonProperty]
-        internal int SearchableNamesOffset;
+        public int SearchableNamesOffset;
 
         /// <summary>Thumbnail table offset</summary>
         [JsonProperty]
-        internal int ThumbnailTableOffset;
+        public int ThumbnailTableOffset;
 
         /// <summary>Should be zero</summary>
         [JsonProperty]
-        internal uint CompressionFlags;
+        public uint CompressionFlags;
 
         /// <summary>List of additional packages that are needed to be cooked for this package. No longer used</summary>
         [JsonProperty]
-        internal List<FString> AdditionalPackagesToCook;
+        public List<FString> AdditionalPackagesToCook;
 
         /// <summary>Location into the file on disk for the asset registry tag data</summary>
-        internal int AssetRegistryDataOffset;
+        public int AssetRegistryDataOffset;
 
         /// <summary>Offset to the location in the file where the bulkdata starts</summary>
-        internal long BulkDataStartOffset;
+        public long BulkDataStartOffset;
 
         /// <summary>Offset to the location in the file where the FWorldTileInfo data start</summary>
-        internal int WorldTileInfoDataOffset;
+        public int WorldTileInfoDataOffset;
 
         /// <summary>Number of preload dependencies contained in this package</summary>
-        internal int PreloadDependencyCount;
+        public int PreloadDependencyCount;
 
         /// <summary>Location into the file on disk for the preload dependency data</summary>
-        internal int PreloadDependencyOffset;
+        public int PreloadDependencyOffset;
 
         [JsonProperty]
-        internal int NamesReferencedFromExportDataCount;
+        public int NamesReferencedFromExportDataCount;
         [JsonProperty]
-        internal int PayloadTocOffset;
+        public int PayloadTocOffset;
         [JsonProperty]
-        internal int DataResourceOffset;
+        public int DataResourceOffset;
 
         [JsonProperty]
         internal bool doWeHaveDependsMap = true;
@@ -467,7 +467,7 @@ namespace UAssetAPI
         [JsonProperty]
         internal bool doWeHaveAssetRegistryData = true;
         [JsonProperty]
-        internal bool doWeHaveWorldTileInfo = true;
+        public bool doWeHaveWorldTileInfo = true;
 
         /// <summary>
         /// Copies a portion of a stream to another stream.

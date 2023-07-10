@@ -10,7 +10,7 @@ namespace UAssetAPI.Kismet
 {
     public static class KismetSerializer
     {
-        public static UAsset asset;
+        public static UnrealPackage asset;
         public struct FSimpleMemberReference
         {
             public string MemberParent;
@@ -90,7 +90,14 @@ namespace UAssetAPI.Kismet
             }
             else if (index < 0)
             {
-                return asset.Imports[-index - 1].ObjectName.ToString();
+                if (asset is UAsset uasset)
+                {
+                    return uasset.Imports[-index - 1].ObjectName.ToString();
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
             }
             else
             {
@@ -128,15 +135,21 @@ namespace UAssetAPI.Kismet
             }
             else if (index < 0)
             {
-
-                if (asset.Imports[-index - 1].OuterIndex.Index != 0)
+                if (asset is UAsset uasset)
                 {
-                    string parent = GetFullName(asset.Imports[-index - 1].OuterIndex.Index);
-                    return parent + "." + asset.Imports[-index - 1].ObjectName.ToString();
+                    if (uasset.Imports[-index - 1].OuterIndex.Index != 0)
+                    {
+                        string parent = GetFullName(uasset.Imports[-index - 1].OuterIndex.Index);
+                        return parent + "." + uasset.Imports[-index - 1].ObjectName.ToString();
+                    }
+                    else
+                    {
+                        return uasset.Imports[-index - 1].ObjectName.ToString();
+                    }
                 }
                 else
                 {
-                    return asset.Imports[-index - 1].ObjectName.ToString();
+                    throw new NotImplementedException();
                 }
 
             }
@@ -163,15 +176,21 @@ namespace UAssetAPI.Kismet
             }
             else if (index < 0)
             {
-
-                if (asset.Imports[-index - 1].OuterIndex.Index != 0)
+                if (asset is UAsset uasset)
                 {
-                    string parent = GetFullName(asset.Imports[-index - 1].OuterIndex.Index);
-                    return parent;
+                    if (uasset.Imports[-index - 1].OuterIndex.Index != 0)
+                    {
+                        string parent = GetFullName(uasset.Imports[-index - 1].OuterIndex.Index);
+                        return parent;
+                    }
+                    else
+                    {
+                        return "";
+                    }
                 }
                 else
                 {
-                    return "";
+                    throw new NotImplementedException();
                 }
 
             }
@@ -330,8 +349,15 @@ namespace UAssetAPI.Kismet
             }
             else if (index < 0)
             {
-                member.MemberName = asset.Imports[-index - 1].ObjectName.ToString();
-                member.MemberParent = asset.Imports[-index - 1].ClassPackage.ToString();
+                if (asset is UAsset uasset)
+                {
+                    member.MemberName = uasset.Imports[-index - 1].ObjectName.ToString();
+                    member.MemberParent = uasset.Imports[-index - 1].ClassPackage.ToString();
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
                 member.MemberGuid = new Guid("00000000000000000000000000000000");
             }
 
@@ -1065,12 +1091,15 @@ namespace UAssetAPI.Kismet
                         index += 4;
                         JObject jstruct = new JObject();
                         int tempindex = 0;
-                        foreach (KismetExpression param in exp.Value)
+                        if (exp.Value != null)
                         {
-                            JArray jstructpart = new JArray();
-                            jstructpart.Add(SerializeExpression(param, ref index));
-                            jstruct.Add("Missing property name" + tempindex, jstructpart);
-                            tempindex++;
+                            foreach (KismetExpression param in exp.Value)
+                            {
+                                JArray jstructpart = new JArray();
+                                jstructpart.Add(SerializeExpression(param, ref index));
+                                jstruct.Add("Missing property name" + tempindex, jstructpart);
+                                tempindex++;
+                            }
                         }
                         index++;
                         jexp.Add("Properties", jstruct);
