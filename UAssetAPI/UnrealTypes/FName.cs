@@ -26,6 +26,10 @@ namespace UAssetAPI.UnrealTypes
                 if (DummyValue != null) return DummyValue;
                 if (Asset == null) throw new InvalidOperationException("Attempt to get Value with no Asset defined");
                 if (Index < 0) return null;
+                if (Type == EMappedNameType.Global && Asset is ZenAsset zenAsset)
+                {
+                    return zenAsset.GlobalData.GetNameReference(Index);
+                }
                 return Asset.GetNameReference(Index);
             }
             set

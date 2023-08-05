@@ -666,6 +666,12 @@ namespace UAssetAPI.IO
                 MetaData.Add(res);
             }
 
+            if (TocVersion < EIoStoreTocVersion.PartitionSize)
+            {
+                PartitionCount = 1;
+                PartitionSize = ulong.MaxValue;
+            }
+
             HasReadToc = true;
         }
 

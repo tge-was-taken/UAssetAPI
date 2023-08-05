@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Xml.Linq;
 using UAssetAPI.IO;
+using UAssetAPI.Unversioned;
 
 namespace UAssetAPI.UnrealTypes
 {
@@ -105,6 +106,21 @@ namespace UAssetAPI.UnrealTypes
             return new FPackageIndex(idx);
         }
 
+        private static Dictionary<FPackageObjectIndex, Import> _importCache = new Dictionary<FPackageObjectIndex, Import>();
+        private static Dictionary<string, UsmapSchema> _schemaCache = new Dictionary<string, UsmapSchema>();
+
+        private object GetImportOrExport(ZenAsset asset, FPackageObjectIndex index)
+        {
+            if (index.IsExport)
+            {
+                return asset.Exports[(int)index.Export];
+            }
+            else
+            {
+                return index.ToImport(asset);
+            }
+        }
+
         public Import ToImport(ZenAsset asset)
         {
             //throw new NotImplementedException("ZenAsset ToImport is currently unimplemented");
@@ -119,15 +135,30 @@ namespace UAssetAPI.UnrealTypes
                 case EPackageObjectIndexType.ScriptImport:
                     //var test = asset.GlobalData.ScriptObjectEntriesMap[this];
 
-                    string derivedStr = asset.GetStringFromCityHash64(Hash); // TODO: why do some hashes not show up here properly? need to get some test cases with their actual intended values
-                    string[] derivedStrSplit = derivedStr?.Split('.');
-                    res.ObjectName = null; // TODO: how can we derive this value?
-                    res.ClassPackage = FName.DefineDummy(asset, derivedStrSplit?[0] ?? Hash.ToString());
-                    res.ClassName = FName.DefineDummy(asset, derivedStrSplit?[1] ?? Hash.ToString());
-                    res.OuterIndex = new FPackageIndex(0);
+                    var scriptObject = asset.GlobalData.ScriptObjectEntriesMap[this];
+                    var outer = GetImportOrExport(asset, scriptObject.OuterIndex);
+                    var cdoClass = GetImportOrExport(asset, scriptObject.CDOClassIndex);
+
+                    res.ObjectName = scriptObject.ObjectName;
+                    res.ClassPackage = (outer as Import)?.ObjectName; // TODO
+                    res.ClassName = (cdoClass as Import)?.ObjectName ??
+                        (scriptObject.ObjectName.ToString().StartsWith("/") ?
+                            FName.DefineDummy(asset, "Package") :
+                            FName.DefineDummy(asset, "Class")); // TODO
+                    res.OuterIndex = scriptObject.OuterIndex.ToFPackageIndex(asset);
                     break;
                 case EPackageObjectIndexType.PackageImport:
-                    throw new NotImplementedException("ToImport on an FPackageObjectIndex with type " + Type + " is currently unimplemented");
+                    // Import global object
+                    // TODO record all exports (SerializeCommand) into a global list and reference that here 
+                    //throw new NotImplementedException("ToImport on an FPackageObjectIndex with type " + Type + " is currently unimplemented");
+                    return new Import()
+                    {
+                        bImportOptional = false,
+                        ClassName = FName.DefineDummy(asset, "Package"),
+                        ClassPackage = FName.DefineDummy(asset, ""),
+                        ObjectName = FName.DefineDummy(asset, $"PackageImport_{Hash.ToString()}"),
+                        OuterIndex = new FPackageIndex(0),
+                    };
             }
             return res;
         }

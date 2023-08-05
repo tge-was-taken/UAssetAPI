@@ -558,7 +558,7 @@ namespace UAssetAPI
                 if ((Exports.Count - 1) > i) nextStarting = Exports[i + 1].SerialOffset;
 
                 FName exportClassTypeName = Exports[i].GetExportClassType();
-                string exportClassType = exportClassTypeName.Value.Value;
+                string exportClassType = exportClassTypeName?.Value?.Value;
                 switch (exportClassType)
                 {
                     case "Level":
@@ -575,17 +575,17 @@ namespace UAssetAPI
                         Exports[i].Read(reader, (int)nextStarting);
                         break;
                     default:
-                        if (exportClassType.EndsWith("DataTable"))
+                        if (exportClassType?.EndsWith("DataTable") ?? false)
                         {
                             Exports[i] = Exports[i].ConvertToChildExport<DataTableExport>();
                             Exports[i].Read(reader, (int)nextStarting);
                         }
-                        else if (exportClassType.EndsWith("StringTable"))
+                        else if (exportClassType?.EndsWith("StringTable") ?? false)
                         {
                             Exports[i] = Exports[i].ConvertToChildExport<StringTableExport>();
                             Exports[i].Read(reader, (int)nextStarting);
                         }
-                        else if (exportClassType.EndsWith("BlueprintGeneratedClass"))
+                        else if (exportClassType?.EndsWith("BlueprintGeneratedClass") ?? false)
                         {
                             var bgc = Exports[i].ConvertToChildExport<ClassExport>();
                             Exports[i] = bgc;

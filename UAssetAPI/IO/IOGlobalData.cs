@@ -70,7 +70,8 @@ namespace UAssetAPI.IO
                     var LoaderGlobalNamesReader = new IOStoreBinaryReader(new MemoryStream(namesChunk), container);
                     for (int i = 0; i < numNames; i++)
                     {
-                        AddNameReference(LoaderGlobalNamesReader.ReadFString(), true);
+                        var header = FSerializedNameHeader.Read(LoaderGlobalNamesReader);
+                        AddNameReference(LoaderGlobalNamesReader.ReadFString(header), true);
                     }
 
                     var lilmChunk = container.ReadChunk(new FIoChunkId(0, 0, EIoChunkType4.LoaderInitialLoadMeta));
@@ -87,7 +88,7 @@ namespace UAssetAPI.IO
                     res.ObjectName = LoaderInitialLoadMetaReader.ReadFName(this);
                     res.GlobalIndex = FPackageObjectIndex.Read(LoaderInitialLoadMetaReader);
                     res.OuterIndex = FPackageObjectIndex.Read(LoaderInitialLoadMetaReader);
-                    res.GlobalIndex = FPackageObjectIndex.Read(LoaderInitialLoadMetaReader);
+                    res.CDOClassIndex = FPackageObjectIndex.Read(LoaderInitialLoadMetaReader);
                     ScriptObjectEntries[i] = res;
                     ScriptObjectEntriesMap[res.GlobalIndex] = res;
                 }

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using UAssetAPI.ExportTypes;
@@ -337,6 +338,7 @@ namespace UAssetAPI.IO
             }
             else
             {
+                // Read PackageSummary
                 Name = reader.ReadFName();
                 SourceName = reader.ReadFName();
                 PackageFlags = (EPackageFlags)reader.ReadUInt32();
@@ -351,12 +353,22 @@ namespace UAssetAPI.IO
                 int GraphDataOffset = reader.ReadInt32();
                 int GraphDataSize = reader.ReadInt32();
 
-                // name map batch
-                reader.ReadNameBatch(VerifyHashes, out HashVersion, out List<FString> tempNameMap);
-                foreach (var entry in tempNameMap)
+                // Read name map
+                var nameMapEntryCount = (NameMapHashesSize / 8) - 1;
+                reader.BaseStream.Seek(NameMapHashesOffset, SeekOrigin.Begin);
+                var hashVersion = reader.ReadUInt64();
+                var nameMapHashes = new ulong[nameMapEntryCount];
+                for (int i = 0; i < nameMapHashes.Length; i++)
+                    nameMapHashes[i] = reader.ReadUInt64();
+
+                reader.BaseStream.Seek(NameMapNamesOffset, SeekOrigin.Begin);
+                ClearNameIndexList();
+                for (int i = 0; i < nameMapEntryCount; i++)
                 {
-                    AddCityHash64MapEntryRaw(entry.Value);
-                    AddNameReference(entry, true);
+                    var header = FSerializedNameHeader.Read(reader);
+                    var str = reader.ReadNameMapString(header, out var hashes);
+                    AddCityHash64MapEntryRaw(str.Value);
+                    AddNameReference(str, true);
                 }
 
                 // import map
@@ -378,15 +390,42 @@ namespace UAssetAPI.IO
                     Exports.Add(newExport);
                 }
 
-                // export bundle entries
                 reader.BaseStream.Seek(ExportBundlesOffset, SeekOrigin.Begin);
-                // weird parsing here, combine both bundles and headers
+                var exportBundlesSize = GraphDataOffset - ExportBundlesOffset;
+                var exportBundleCount = exportBundlesSize / 8;
+                var remainingBundleEntryCount = exportBundleCount;
+                var foundBundlesCount = 0u;
+                var exportBundleHeadersList = new List<FExportBundleHeader>();
+                while (foundBundlesCount < remainingBundleEntryCount)
+                {
+                    remainingBundleEntryCount--;
+                    var exportBundleHeader = FExportBundleHeader.Read(reader);
+                    foundBundlesCount += exportBundleHeader.EntryCount;
+                    exportBundleHeadersList.Add(exportBundleHeader);
+                }
+                exportBundleHeaders = exportBundleHeadersList.ToArray();
 
-                // graph data (?)
+                exportBundleEntries = new FExportBundleEntry[foundBundlesCount];
+                for (int i = 0; i < exportBundleEntries.Length; i++)
+                    exportBundleEntries[i] = FExportBundleEntry.Read(reader);
 
+                // TODO save this data soemwhere
+                reader.BaseStream.Seek(GraphDataOffset, SeekOrigin.Begin);
+                var importedPackageCount = reader.ReadInt32();
+                for (int i = 0; i < importedPackageCount; i++)
+                {
+                    var importedPackageId = reader.ReadInt64();
+                    var externalArcCount = reader.ReadInt32();
+                    for (int j = 0; j < externalArcCount; j++)
+                    {
+                        var fromExportBundleIndex = reader.ReadInt32();
+                        var toExportBundleIndex = reader.ReadInt32();
+                    }
+                }
             }
 
             // end summary
+            var cookedSerialOffsetBase = (Exports[0]?.SerialOffset ?? 0) - reader.BaseStream.Position;
             
             foreach (FExportBundleHeader headr in exportBundleHeaders)
             {
@@ -396,6 +435,8 @@ namespace UAssetAPI.IO
                     switch (entry.CommandType)
                     {
                         case EExportCommandType.ExportCommandType_Serialize:
+                            var cookedSerialOffset = Exports[(int)entry.LocalExportIndex].SerialOffset - cookedSerialOffsetBase;
+                            reader.BaseStream.Seek(cookedSerialOffset, SeekOrigin.Begin);
                             ConvertExportToChildExportAndRead(reader, (int)entry.LocalExportIndex);
                             break;
                     }
@@ -453,6 +494,26 @@ namespace UAssetAPI.IO
 
             Read(PathToReader(path));
         }
+
+
+        /// <summary>
+        /// Reads an asset from disk and initializes a new instance of the <see cref="UAsset"/> class to store its data in memory.
+        /// </summary>
+        /// <param name="path">The path of the asset file on disk that this instance will read from.</param>
+        /// <param name="engineVersion">The version of the Unreal Engine that will be used to parse this asset. If the asset is versioned, this can be left unspecified.</param>
+        /// <param name="mappings">A valid set of mappings for the game that this asset is from. Not required unless unversioned properties are used.</param>
+        /// <exception cref="UnknownEngineVersionException">Thrown when this is an unversioned asset and <see cref="ObjectVersion"/> is unspecified.</exception>
+        /// <exception cref="FormatException">Throw when the asset cannot be parsed correctly.</exception>
+        public ZenAsset(string path, EngineVersion engineVersion = EngineVersion.UNKNOWN, Usmap mappings = null, IOGlobalData globalData = null)
+        {
+            this.FilePath = path;
+            this.Mappings = mappings;
+            this.GlobalData = globalData;
+            SetEngineVersion(engineVersion);
+
+            Read(PathToReader(path));
+        }
+
 
         /// <summary>
         /// Reads an asset from a BinaryReader and initializes a new instance of the <see cref="ZenAsset"/> class to store its data in memory.
