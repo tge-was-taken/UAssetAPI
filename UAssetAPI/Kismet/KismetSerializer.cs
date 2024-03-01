@@ -214,7 +214,7 @@ namespace UAssetAPI.Kismet
             {
                 foreach (FProperty prop in (export as StructExport).LoadedProperties)
                 {
-                    if (prop.Name == propname)
+                    if (prop.Name.ToString() == propname.ToString())
                     {
                         property = prop;
                         return true;

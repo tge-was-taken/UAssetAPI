@@ -314,5 +314,11 @@ namespace UAssetAPI.UnrealTypes
         FUNC_Const = 0x40000000,
         FUNC_NetValidate = 0x80000000,
         FUNC_AllFlags = 0xFFFFFFFF,
+
+        // Combinations of other flags
+        //FUNC_FuncInherit = FUNC_Exec | FUNC_Event | FUNC_BlueprintCallable | FUNC_BlueprintEvent | FUNC_BlueprintAuthorityOnly | FUNC_BlueprintCosmetic | FUNC_Const,
+        //FUNC_FuncOverrideMatch = FUNC_Exec | FUNC_Final | FUNC_Static | FUNC_Public | FUNC_Protected | FUNC_Private,
+        //FUNC_NetFuncFlags = FUNC_Net | FUNC_NetReliable | FUNC_NetServer | FUNC_NetClient | FUNC_NetMulticast,
+        //FUNC_AccessSpecifiers = FUNC_Public | FUNC_Private | FUNC_Protected,
     };
 }

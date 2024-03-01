@@ -27,7 +27,7 @@ namespace UAssetAPI.ExportTypes
         /// <summary>
         /// Properties serialized with this struct definition
         /// </summary>
-        public FProperty[] LoadedProperties;
+        public List<FProperty> LoadedProperties;
 
         /// <summary>
         /// The bytecode instructions contained within this struct.
@@ -90,15 +90,15 @@ namespace UAssetAPI.ExportTypes
             if (Asset.GetCustomVersion<FCoreObjectVersion>() >= FCoreObjectVersion.FProperties)
             {
                 int numProps = reader.ReadInt32();
-                LoadedProperties = new FProperty[numProps];
+                LoadedProperties = new List<FProperty>();
                 for (int i = 0; i < numProps; i++)
                 {
-                    LoadedProperties[i] = MainSerializer.ReadFProperty(reader);
+                    LoadedProperties.Add(MainSerializer.ReadFProperty(reader));
                 }
             }
             else
             {
-                LoadedProperties = new FProperty[0];
+                LoadedProperties = new List<FProperty>();
             }
 
             ScriptBytecodeSize = reader.ReadInt32(); // # of bytes in total in deserialized memory
@@ -164,8 +164,8 @@ namespace UAssetAPI.ExportTypes
 
             if (Asset.GetCustomVersion<FCoreObjectVersion>() >= FCoreObjectVersion.FProperties)
             {
-                writer.Write(LoadedProperties.Length);
-                for (int i = 0; i < LoadedProperties.Length; i++)
+                writer.Write(LoadedProperties.Count);
+                for (int i = 0; i < LoadedProperties.Count; i++)
                 {
                     MainSerializer.WriteFProperty(LoadedProperties[i], writer);
                 }
