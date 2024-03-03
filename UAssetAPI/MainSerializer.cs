@@ -265,7 +265,7 @@ namespace UAssetAPI
             long startingOffset = 0;
             if (reader != null) startingOffset = reader.BaseStream.Position;
 
-            if (type.Value.Value == "None") return null;
+            if (type.Value == null || type.Value.Value == "None") return null;
 
             PropertyData data = null;
             if (PropertyTypeRegistry.ContainsKey(type.Value.Value))
@@ -401,7 +401,7 @@ namespace UAssetAPI
             else
             {
                 name = reader.ReadFName();
-                if (name.Value.Value == "None") return null;
+                if (name.Value == null || name.Value.Value == "None") return null;
 
                 type = reader.ReadFName();
 
@@ -410,6 +410,7 @@ namespace UAssetAPI
             }
 
             PropertyData result = TypeToClass(type, name, ancestry, parentName, reader.Asset, reader, leng, duplicationIndex, includeHeader, isZero);
+            if (result == null) return null;
             if (structType != null && result is StructPropertyData strucProp) strucProp.StructType = FName.DefineDummy(reader.Asset, structType);
             result.Offset = startingOffset;
             //Debug.WriteLine(type);
