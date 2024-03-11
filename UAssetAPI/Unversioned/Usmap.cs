@@ -163,6 +163,7 @@ namespace UAssetAPI.Unversioned
     public class UsmapPropertyData
     {
         public EPropertyType Type = EPropertyType.Unknown;
+        public EPropertyFlags Flags;
 
         public UsmapPropertyData(EPropertyType type)
         {
@@ -209,6 +210,17 @@ namespace UAssetAPI.Unversioned
         }
     }
 
+    public class UsmapFunction
+    {
+        public string Name;
+        public EFunctionFlags FunctionFlags;
+        public int ParameterCount;
+        public Dictionary<int, UsmapProperty> Properties = new Dictionary<int, UsmapProperty>();
+
+        public short PropertyCount { get; internal set; }
+        public short SerializablePropertyCount { get; internal set; }
+    }
+
     public class UsmapSchema
     {
         public string Name;
@@ -216,9 +228,11 @@ namespace UAssetAPI.Unversioned
         public ushort PropCount;
         public string ModulePath;
         public IReadOnlyDictionary<int, UsmapProperty> Properties => properties;
+        public Dictionary<int, UsmapFunction> Functions { get; } = new Dictionary<int, UsmapFunction>();
 
         private Dictionary<int, UsmapProperty> properties;
         private Dictionary<Tuple<string, int>, UsmapProperty> propertiesMap;
+ 
 
         public UsmapStructKind StructKind;
         public int StructOrClassFlags;
@@ -316,7 +330,12 @@ namespace UAssetAPI.Unversioned
         /// <summary>
         /// .usmap schema map
         /// </summary>
-        public Dictionary<string, UsmapSchema> Schemas;
+        public Dictionary<string, UsmapSchema> SchemasByName;
+
+        /// <summary>
+        /// .usmap schema map
+        /// </summary>
+        public UsmapSchema[] Schemas;
 
         /// <summary>
         /// Pre-computed CityHash64 map for all relevant strings
@@ -470,9 +489,9 @@ namespace UAssetAPI.Unversioned
             if (string.IsNullOrEmpty(nm)) return null;
 
             UsmapSchema relevantSchema = null;
-            if (this.Schemas.ContainsKey(nm))
+            if (this.SchemasByName.ContainsKey(nm))
             {
-                relevantSchema = this.Schemas[nm];
+                relevantSchema = this.SchemasByName[nm];
             }
             else if (asset != null)
             {
@@ -647,13 +666,18 @@ namespace UAssetAPI.Unversioned
             return new UsmapPropertyData(typ);
         }
 
-        private UsmapPropertyData DeserializePropData(UsmapBinaryReader reader)
+        private UsmapPropertyData DeserializePropData(UsmapBinaryReader reader, bool includeFlags)
         {
-            var res = InitPropData((EPropertyType)reader.ReadByte());
+            EPropertyFlags flags = 0;
+            if (includeFlags)
+                flags = (EPropertyFlags)reader.ReadInt64();
+            var type = (EPropertyType)reader.ReadByte();
+            var res = InitPropData(type);
+            res.Flags = flags;
             switch (res.Type)
             {
                 case EPropertyType.EnumProperty:
-                    ((UsmapEnumData)res).InnerType = DeserializePropData(reader);
+                    ((UsmapEnumData)res).InnerType = DeserializePropData(reader, includeFlags);
                     ((UsmapEnumData)res).Name = reader.ReadName();
                     break;
                 case EPropertyType.StructProperty:
@@ -661,11 +685,11 @@ namespace UAssetAPI.Unversioned
                     break;
                 case EPropertyType.SetProperty:
                 case EPropertyType.ArrayProperty:
-                    ((UsmapArrayData)res).InnerType = DeserializePropData(reader);
+                    ((UsmapArrayData)res).InnerType = DeserializePropData(reader, includeFlags);
                     break;
                 case EPropertyType.MapProperty:
-                    ((UsmapMapData)res).InnerType = DeserializePropData(reader);
-                    ((UsmapMapData)res).ValueType = DeserializePropData(reader);
+                    ((UsmapMapData)res).InnerType = DeserializePropData(reader, includeFlags);
+                    ((UsmapMapData)res).ValueType = DeserializePropData(reader, includeFlags);
                     break;
                 default:
                     break;
@@ -710,9 +734,9 @@ namespace UAssetAPI.Unversioned
 
             // part 3: schema
             //Console.WriteLine(reader.BaseStream.Position);
-            Schemas = new Dictionary<string, UsmapSchema>();
+            SchemasByName = new Dictionary<string, UsmapSchema>();
             int numSchema = reader.ReadInt32();
-            UsmapSchema[] schemaIndexMap = new UsmapSchema[numSchema];
+            Schemas = new UsmapSchema[numSchema];
             for (int i = 0; i < numSchema; i++)
             {
                 string schemaName = reader.ReadName();
@@ -727,7 +751,7 @@ namespace UAssetAPI.Unversioned
                     string Name = reader.ReadName();
 
                     var currProp = new UsmapProperty(Name, SchemaIdx, 0, ArraySize, null);
-                    currProp.PropertyData = DeserializePropData(reader);
+                    currProp.PropertyData = DeserializePropData(reader, false);
                     for (int k = 0; k < ArraySize; k++)
                     {
                         var cln = (UsmapProperty)currProp.Clone();
@@ -738,8 +762,8 @@ namespace UAssetAPI.Unversioned
                 }
 
                 var newSchema = new UsmapSchema(schemaName, schemaSuperName, numProps, props);
-                schemaIndexMap[i] = newSchema;
-                Schemas[schemaName] = newSchema;
+                Schemas[i] = newSchema;
+                SchemasByName[schemaName] = newSchema;
             }
 
             void ReadExtension(string extId, uint extLeng)
@@ -761,8 +785,8 @@ namespace UAssetAPI.Unversioned
                         int ppthNumSchemas = reader.ReadInt32();
                         for (int i = 0; i < ppthNumSchemas; i++)
                         {
-                            schemaIndexMap[i].ModulePath = reader.ReadName();
-                            AddCityHash64MapEntry(schemaIndexMap[i].ModulePath + "." + schemaIndexMap[i].Name);
+                            Schemas[i].ModulePath = reader.ReadName();
+                            AddCityHash64MapEntry(Schemas[i].ModulePath + "." + Schemas[i].Name);
                         }
 
                         if (reader.BaseStream.Position != endPos) throw new FormatException("Failed to parse extension " + extId + ": ended at " + reader.BaseStream.Position + ", expected " + endPos);
@@ -779,12 +803,12 @@ namespace UAssetAPI.Unversioned
                         int eatrNumSchemas = reader.ReadInt32();
                         for (int i = 0; i < eatrNumSchemas; i++)
                         {
-                            schemaIndexMap[i].StructKind = (UsmapStructKind)reader.ReadByte();
-                            schemaIndexMap[i].StructOrClassFlags = reader.ReadInt32();
+                            Schemas[i].StructKind = (UsmapStructKind)reader.ReadByte();
+                            Schemas[i].StructOrClassFlags = reader.ReadInt32();
                             int eatrNumProps = reader.ReadInt32();
                             for (int j = 0; j < eatrNumProps; j++)
                             {
-                                schemaIndexMap[i].Properties[j].PropertyFlags = (EPropertyFlags)reader.ReadUInt64();
+                                Schemas[i].Properties[j].PropertyFlags = (EPropertyFlags)reader.ReadUInt64();
                             }
                         }
 
@@ -813,13 +837,50 @@ namespace UAssetAPI.Unversioned
                         ushort numModulePaths = reader.ReadUInt16();
                         string[] modulePaths = new string[numModulePaths];
                         for (int i = 0; i < numModulePaths; i++) modulePaths[i] = reader.ReadString();
-                        for (int i = 0; i < schemaIndexMap.Length; i++)
+                        for (int i = 0; i < Schemas.Length; i++)
                         {
-                            schemaIndexMap[i].ModulePath = modulePaths[numModulePaths > byte.MaxValue ? reader.ReadUInt16() : reader.ReadByte()];
-                            AddCityHash64MapEntry(schemaIndexMap[i].ModulePath + "." + schemaIndexMap[i].Name);
+                            Schemas[i].ModulePath = modulePaths[numModulePaths > byte.MaxValue ? reader.ReadUInt16() : reader.ReadByte()];
+                            AddCityHash64MapEntry(Schemas[i].ModulePath + "." + Schemas[i].Name);
                         }
 
                         if (reader.BaseStream.Position != endPos) throw new FormatException("Failed to parse extension " + extId + ": ended at " + reader.BaseStream.Position + ", expected " + endPos);
+                        break;
+                    case "FUNC":
+                        {
+                            //var version = reader.ReadByte();
+                            //var structCount = reader.ReadInt32();
+                            //for (int i = 0; i < structCount; ++i)
+                            //{
+                            //    var functionCount = reader.ReadInt32();
+                            //    for (int l = 0; l < functionCount; l++)
+                            //    {
+                            //        var func = new UsmapFunction();
+                            //        func.Name = reader.ReadName();
+                            //        func.FunctionFlags = (EFunctionFlags)reader.ReadInt32();
+                            //        func.ParameterCount = reader.ReadInt32();
+                            //        func.PropertyCount = reader.ReadInt16();
+                            //        func.SerializablePropertyCount = reader.ReadInt16();
+                            //        for (int j = 0; j < func.SerializablePropertyCount; j++)
+                            //        {
+                            //            var schemaIdx = reader.ReadUInt16();
+                            //            var arraySize = reader.ReadByte();
+                            //            var propName = reader.ReadName();
+
+                            //            var currProp = new UsmapProperty(propName, schemaIdx, 0, arraySize, null);
+                            //            currProp.PropertyData = DeserializePropData(reader, true);
+                            //            currProp.PropertyFlags = currProp.PropertyData.Flags;
+                            //            for (int k = 0; k < arraySize; k++)
+                            //            {
+                            //                var cln = (UsmapProperty)currProp.Clone();
+                            //                cln.SchemaIndex = (ushort)(schemaIdx + k);
+                            //                cln.ArrayIndex = (ushort)k;
+                            //                func.Properties.Add(schemaIdx + k, cln);
+                            //            }
+                            //        }
+                            //        Schemas[i].Functions.Add(l, func);
+                            //    }
+                            //}
+                        }
                         break;
                     default:
                         break;

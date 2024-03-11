@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UAssetAPI.ExportTypes;
 using UAssetAPI.UnrealTypes;
@@ -165,6 +166,12 @@ namespace UAssetAPI.IO
         }
     }
 
+    public class ImportedPackage
+    {
+        public ulong PackageId { get; set; }
+        public List<FExternalArc> ExternalArcs { get; set; } = new List<FExternalArc>();
+    }
+
     public class ZenAsset : UnrealPackage
     {
         /// <summary>
@@ -187,9 +194,14 @@ namespace UAssetAPI.IO
         /// <summary>
         /// Map of object imports. UAssetAPI used to call these "links."
         /// </summary>
-        public List<FPackageObjectIndex> Imports;
+        public List<FPackageObjectIndex> Imports = new List<FPackageObjectIndex>();
 
         private Dictionary<ulong, string> CityHash64Map = new Dictionary<ulong, string>();
+
+        public List<FExportBundleHeader> ExportBundleHeaders { get; private set; } = new List<FExportBundleHeader>();
+        public List<FExportBundleEntry> ExportBundleEntries { get; private set; } = new List<FExportBundleEntry>();
+        public List<ImportedPackage> ImportedPackages { get; private set; } = new List<ImportedPackage>();
+
         private void AddCityHash64MapEntryRaw(string val)
         {
             ulong hsh = CRCGenerator.GenerateImportHashFromObjectPath(val);
@@ -232,20 +244,18 @@ namespace UAssetAPI.IO
         /// <exception cref="FormatException">Throw when the asset cannot be parsed correctly.</exception>
         public override void Read(AssetBinaryReader reader, int[] manualSkips = null, int[] forceReads = null)
         {
-            if (Mappings == null) throw new InvalidOperationException();
             if (ObjectVersion == ObjectVersion.UNKNOWN) throw new UnknownEngineVersionException("Cannot begin serialization before an object version is specified");
 
-            FExportBundleEntry[] exportBundleEntries = null;
-            FExportBundleHeader[] exportBundleHeaders = null;
             FInternalArc[] internalArcs = null;
             FExternalArc[][] externalArcs = null; // the index is the same as the index into the ImportedPackageIds map
+            uint CookedHeaderSize;
             if (ObjectVersionUE5 >= ObjectVersionUE5.INITIAL_VERSION)
             {
                 IsUnversioned = reader.ReadUInt32() == 0;
                 uint HeaderSize = reader.ReadUInt32();
                 Name = reader.ReadFName();
                 PackageFlags = (EPackageFlags)reader.ReadUInt32();
-                uint CookedHeaderSize = reader.ReadUInt32(); // where does this number come from?
+                CookedHeaderSize = reader.ReadUInt32(); // where does this number come from?
                 int ImportedPublicExportHashesOffset = reader.ReadInt32();
                 int ImportMapOffset = reader.ReadInt32();
                 int ExportMapOffset = reader.ReadInt32();
@@ -304,23 +314,23 @@ namespace UAssetAPI.IO
                 // export bundle entries; gives order that exports should be serialized
                 reader.BaseStream.Seek(ExportBundleEntriesOffset, SeekOrigin.Begin);
                 long startPos = reader.BaseStream.Position;
-                exportBundleEntries = new FExportBundleEntry[Exports.Count * (int)(uint)EExportCommandType.ExportCommandType_Count];
-                for (int i = 0; i < exportBundleEntries.Length; i++) exportBundleEntries[i] = FExportBundleEntry.Read(reader);
+                var exportBundleCount = Exports.Count * (int)(uint)EExportCommandType.ExportCommandType_Count;
+                ExportBundleEntries = new List<FExportBundleEntry>(exportBundleCount);
+                for (int i = 0; i < exportBundleCount; i++) ExportBundleEntries.Add(FExportBundleEntry.Read(reader));
                 long endPos = reader.BaseStream.Position;
                 if (endPos != GraphDataOffset) throw new FormatException("extra padding is needed; please report if you see this error message");
                 //reader.ReadBytes((int)UAPUtils.AlignPadding(endPos - startPos, 8));
 
                 // graph data, once this is implemented fix FPackageIndex ToImport & GetParentClass
                 reader.BaseStream.Seek(GraphDataOffset, SeekOrigin.Begin);
-                var exportBundleHeadersList = new List<FExportBundleHeader>();
+                ExportBundleHeaders = new List<FExportBundleHeader>();
                 int numEntriesTotal = 0;
-                while (numEntriesTotal < exportBundleEntries.Length)
+                while (numEntriesTotal < exportBundleCount)
                 {
                     var nxt = FExportBundleHeader.Read(reader);
                     numEntriesTotal += (int)nxt.EntryCount;
-                    exportBundleHeadersList.Add(nxt);
+                    ExportBundleHeaders.Add(nxt);
                 }
-                exportBundleHeaders = exportBundleHeadersList.ToArray();
 
                 int numInternalArcs = reader.ReadInt32();
                 internalArcs = new FInternalArc[numInternalArcs];
@@ -342,7 +352,7 @@ namespace UAssetAPI.IO
                 Name = reader.ReadFName();
                 SourceName = reader.ReadFName();
                 PackageFlags = (EPackageFlags)reader.ReadUInt32();
-                uint CookedHeaderSize = reader.ReadUInt32();
+                CookedHeaderSize = reader.ReadUInt32();
                 int NameMapNamesOffset = reader.ReadInt32();
                 int NameMapNamesSize = reader.ReadInt32();
                 int NameMapHashesOffset = reader.ReadInt32();
@@ -356,7 +366,7 @@ namespace UAssetAPI.IO
                 // Read name map
                 var nameMapEntryCount = (NameMapHashesSize / 8) - 1;
                 reader.BaseStream.Seek(NameMapHashesOffset, SeekOrigin.Begin);
-                var hashVersion = reader.ReadUInt64();
+                HashVersion = reader.ReadUInt64();
                 var nameMapHashes = new ulong[nameMapEntryCount];
                 for (int i = 0; i < nameMapHashes.Length; i++)
                     nameMapHashes[i] = reader.ReadUInt64();
@@ -395,43 +405,45 @@ namespace UAssetAPI.IO
                 var exportBundleCount = exportBundlesSize / 8;
                 var remainingBundleEntryCount = exportBundleCount;
                 var foundBundlesCount = 0u;
-                var exportBundleHeadersList = new List<FExportBundleHeader>();
+                ExportBundleHeaders = new List<FExportBundleHeader>();
                 while (foundBundlesCount < remainingBundleEntryCount)
                 {
                     remainingBundleEntryCount--;
                     var exportBundleHeader = FExportBundleHeader.Read(reader);
                     foundBundlesCount += exportBundleHeader.EntryCount;
-                    exportBundleHeadersList.Add(exportBundleHeader);
+                    ExportBundleHeaders.Add(exportBundleHeader);
                 }
-                exportBundleHeaders = exportBundleHeadersList.ToArray();
 
-                exportBundleEntries = new FExportBundleEntry[foundBundlesCount];
-                for (int i = 0; i < exportBundleEntries.Length; i++)
-                    exportBundleEntries[i] = FExportBundleEntry.Read(reader);
+                ExportBundleEntries = new List<FExportBundleEntry>((int)foundBundlesCount);
+                for (int i = 0; i < foundBundlesCount; i++)
+                    ExportBundleEntries.Add(FExportBundleEntry.Read(reader));
 
                 // TODO save this data soemwhere
                 reader.BaseStream.Seek(GraphDataOffset, SeekOrigin.Begin);
                 var importedPackageCount = reader.ReadInt32();
                 for (int i = 0; i < importedPackageCount; i++)
                 {
-                    var importedPackageId = reader.ReadInt64();
+                    var importedPackageId = reader.ReadUInt64();
                     var externalArcCount = reader.ReadInt32();
+                    var importedPackage = new ImportedPackage() { PackageId = importedPackageId };
                     for (int j = 0; j < externalArcCount; j++)
                     {
                         var fromExportBundleIndex = reader.ReadInt32();
                         var toExportBundleIndex = reader.ReadInt32();
+                        importedPackage.ExternalArcs.Add(new FExternalArc() { FromImportIndex = fromExportBundleIndex, ToExportBundleIndex = toExportBundleIndex });
                     }
+                    ImportedPackages.Add(importedPackage);
                 }
             }
 
             // end summary
             var cookedSerialOffsetBase = (Exports[0]?.SerialOffset ?? 0) - reader.BaseStream.Position;
             
-            foreach (FExportBundleHeader headr in exportBundleHeaders)
+            foreach (FExportBundleHeader headr in ExportBundleHeaders)
             {
                 for (uint i = 0u; i < headr.EntryCount; i++)
                 {
-                    FExportBundleEntry entry = exportBundleEntries[headr.FirstEntryIndex + i];
+                    FExportBundleEntry entry = ExportBundleEntries[(int)(headr.FirstEntryIndex + i)];
                     switch (entry.CommandType)
                     {
                         case EExportCommandType.ExportCommandType_Serialize:
@@ -450,15 +462,114 @@ namespace UAssetAPI.IO
         /// <returns>A stream that the asset has been serialized to.</returns>
         public override MemoryStream WriteData()
         {
+            if (Exports == null || Exports.Count == 0) throw new InvalidOperationException("No exports to write.");
+            if (ObjectVersion == ObjectVersion.UNKNOWN) throw new InvalidOperationException("Object version must be specified before serialization.");
+
             if (ObjectVersionUE5 >= ObjectVersionUE5.INITIAL_VERSION)
+                throw new NotImplementedException();
+
+            var stream = new MemoryStream();
+            var writer = new AssetBinaryWriter(stream, this);
+            var headerPos = writer.BaseStream.Position;
+            writer.Seek(64, SeekOrigin.Current); // write later
+
+            var nameMapNamesOffset = writer.BaseStream.Position;
+            for (int i = 0; i < nameMapIndexList.Count; i++)
             {
-                throw new NotImplementedException("UE5 IO store parsing is not implemented");
+                var name = nameMapIndexList[i];
+                var isWide = name.Value.Any(x => x > 0x7F);
+                FSerializedNameHeader.Write(writer, isWide, name.Value.Length);
+                if (!isWide)
+                {
+                    writer.Write(Encoding.ASCII.GetBytes(name.Value));
+                }
+                else
+                {
+                    writer.Write(Encoding.Unicode.GetBytes(name.Value));
+                }
             }
-            else
+            var nameMapNamesSize = writer.BaseStream.Position - nameMapNamesOffset;
+            writer.Align(8);
+
+            var nameMapHashesOffset = writer.BaseStream.Position;
+            writer.Write(HashVersion);
+            for (int i = 0; i < nameMapIndexList.Count; i++)
             {
-                // i dont know if pre-5.0 io store assets are just equivalent to regular uassets or not... investigate further
-                throw new NotImplementedException("Pre-UE5 IO store parsing is not implemented");
+                var name = nameMapIndexList[i];
+                writer.Write(CRCGenerator.CityHash64WithLower(name));
             }
+            var nameMapHashesSize = writer.BaseStream.Position - nameMapHashesOffset;
+
+            var importMapOffset = writer.BaseStream.Position;
+            foreach (var import in Imports)
+            {
+                writer.Write(import.Hash);
+            }
+
+            var exportMapOffset = writer.BaseStream.Position;
+            writer.Seek(72 * Exports.Count, SeekOrigin.Current); // write later
+
+            var exportBundlesOffset = writer.BaseStream.Position;
+            foreach (var item in ExportBundleHeaders)
+            {
+                writer.Write(item.FirstEntryIndex);
+                writer.Write(item.EntryCount);
+            }
+
+            foreach (var item in ExportBundleEntries)
+            {
+                writer.Write(item.LocalExportIndex);
+                writer.Write((int)item.CommandType);
+            }
+
+            var graphDataOffset = writer.BaseStream.Position;
+            writer.Write(ImportedPackages.Count);
+            foreach (var import in ImportedPackages)
+            {
+                writer.Write(import.PackageId);
+                writer.Write(import.ExternalArcs.Count);
+                foreach (var item in import.ExternalArcs)
+                {
+                    writer.Write(item.FromImportIndex);
+                    writer.Write(item.ToExportBundleIndex);
+                }
+            }
+            var graphDataSize = writer.BaseStream.Position - graphDataOffset;
+            
+            foreach (var item in Exports)
+            {
+                item.SerialOffset = writer.BaseStream.Position;
+                item.Write(writer);
+            }
+
+            var endOffset = writer.BaseStream.Position;
+
+            // write export map
+            writer.BaseStream.Position = exportMapOffset;
+            foreach (var item in Exports)
+                item.WriteExportMapEntry(writer);
+
+            // write header
+            writer.BaseStream.Position = headerPos;
+            writer.Write(Name);
+            writer.Write(SourceName);
+            writer.Write((int)PackageFlags);
+            writer.Write((int)0x5775); // cooked header size??
+            writer.Write((int)nameMapNamesOffset);
+            writer.Write((int)nameMapNamesSize);
+            writer.Write((int)nameMapHashesOffset);
+            writer.Write((int)nameMapHashesSize);
+            writer.Write((int)importMapOffset);
+            writer.Write((int)exportMapOffset);
+            writer.Write((int)exportBundlesOffset);
+            writer.Write((int)graphDataOffset);
+            writer.Write((int)graphDataSize);
+            writer.Write((int)0); // pad
+
+            // it is done
+            writer.BaseStream.Position = 0;
+
+            return stream;
         }
 
         /// <summary>
@@ -468,7 +579,6 @@ namespace UAssetAPI.IO
         /// <exception cref="UnknownEngineVersionException">Thrown when <see cref="ObjectVersion"/> is unspecified.</exception>
         public override void Write(string outputPath)
         {
-            if (Mappings == null) throw new InvalidOperationException();
             if (ObjectVersion == ObjectVersion.UNKNOWN) throw new UnknownEngineVersionException("Cannot begin serialization before an object version is specified");
 
             MemoryStream newData = WriteData();

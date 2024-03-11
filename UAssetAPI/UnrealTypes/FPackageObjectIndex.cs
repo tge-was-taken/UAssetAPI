@@ -144,7 +144,7 @@ namespace UAssetAPI.UnrealTypes
                     res.ClassName = (cdoClass as Import)?.ObjectName ??
                         (scriptObject.ObjectName.ToString().StartsWith("/") ?
                             FName.DefineDummy(asset, "Package") :
-                            FName.DefineDummy(asset, "Class")); // TODO
+                            FName.DefineDummy(asset, "Object"));
                     res.OuterIndex = scriptObject.OuterIndex.ToFPackageIndex(asset);
                     break;
                 case EPackageObjectIndexType.PackageImport:

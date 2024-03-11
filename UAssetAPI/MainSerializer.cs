@@ -209,7 +209,7 @@ namespace UAssetAPI
                 // add "blank" fragment
                 // i'm pretty sure that any SkipNum should work here as long as ValueNum = 0, but this is what the engine does
                 string highestSchema = parentName?.Value?.Value;
-                int numSkip = asset.Mappings.Schemas[highestSchema].Properties.Count == 0 ? 0 : Math.Min(asset.Mappings.GetAllProperties(highestSchema).Count, FFragment.SkipMax);
+                int numSkip = asset.Mappings.SchemasByName[highestSchema].Properties.Count == 0 ? 0 : Math.Min(asset.Mappings.GetAllProperties(highestSchema).Count, FFragment.SkipMax);
                 allFrags.Add(new FFragment(numSkip, 0, true, false));
             }
 
@@ -379,7 +379,7 @@ namespace UAssetAPI
                 while (practicingUnversionedPropertyIndex >= relevantSchema.PropCount) // if needed, go to parent struct
                 {
                     practicingUnversionedPropertyIndex -= relevantSchema.PropCount;
-                    relevantSchema = (relevantSchema.SuperType != null && reader.Asset.Mappings.Schemas.ContainsKey(relevantSchema.SuperType)) ? reader.Asset.Mappings.Schemas[relevantSchema.SuperType] : null;
+                    relevantSchema = (relevantSchema.SuperType != null && reader.Asset.Mappings.SchemasByName.ContainsKey(relevantSchema.SuperType)) ? reader.Asset.Mappings.SchemasByName[relevantSchema.SuperType] : null;
                     if (relevantSchema == null) throw new FormatException("Failed to find a valid property for schema index " + header.UnversionedPropertyIndex + " in the class " + parentName.Value.Value);
                 }
                 UsmapProperty relevantProperty = relevantSchema.Properties[practicingUnversionedPropertyIndex];
@@ -400,6 +400,7 @@ namespace UAssetAPI
             }
             else
             {
+                throw new NotImplementedException();
                 name = reader.ReadFName();
                 if (name.Value == null || name.Value.Value == "None") return null;
 

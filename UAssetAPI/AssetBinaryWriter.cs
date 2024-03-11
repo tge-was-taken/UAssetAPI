@@ -202,6 +202,17 @@ namespace UAssetAPI
             Asset = asset;
         }
 
+        public void Align(int alignment)
+        {
+            var alignmentOffset = BaseStream.Position % alignment;
+
+            if (alignmentOffset != 0)
+            {
+                var padding = alignment - alignmentOffset;
+                Write(new byte[padding]);
+            }
+        }
+
         public virtual void Write(FName name)
         {
             if (name == null) name = new FName(Asset, 0, 0);
